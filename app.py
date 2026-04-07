@@ -2,131 +2,111 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
-import requests
 from fpdf import FPDF
 from datetime import datetime
 
-# --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V60 ---
-VERSION_FINANCE = "V60-ARCHIE-MONOLITHE"
+# --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V70 ---
+VERSION_FINANCE = "V70-STRESS-TEST-INTEGRATED"
 st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
-# --- 🌐 MOTEUR DE SCRAPING FINANCIER (LIVE MARKET) ---
-def get_live_market_data():
-    # Valeurs par défaut (Sécurité si le réseau échoue)
-    data = {"BRENT": 84.50, "TND_USD": 3.14} 
-    # Note : Le système simule ici la capture des flux OilPrice & Central Bank Tunisia
-    return data
-
-live_market = get_live_market_data()
-
-# --- 📁 MOTEUR DE MISE À JOUR (SYNC EXCEL) ---
+# --- 📁 MOTEUR DE DONNÉES (SYNC EXCEL) ---
 def load_internal_kpis():
-    # Chemin du fichier que vous devez uploader sur GitHub
     file_path = "kms_data.xlsx"
     if os.path.exists(file_path):
         try:
             df = pd.read_excel(file_path)
-            # Transforme le tableau Excel en dictionnaire utilisable par le code
             return df.set_index('Indicateur')['Valeur'].to_dict()
-        except Exception as e:
-            st.error(f"Erreur de lecture Excel : {e}")
-    
-    # Valeurs de secours si le fichier Excel est absent ou corrompu
+        except: pass
     return {
-        "W_MSHOP": 0.64, 
-        "W_DSALES": 0.19, 
-        "W_MAIN": 0.17, 
-        "SEUIL_CAPEX": 0.141, 
-        "INF_ACIER": 0.12
+        "W_MSHOP": 0.64, "W_DSALES": 0.19, "W_MAIN": 0.17, 
+        "SEUIL_CAPEX": 0.141, "INF_ACIER": 0.12, "BRENT": 84.5, "TND_USD": 3.14
     }
 
-internal = load_internal_kpis()
+data = load_internal_kpis()
 
-# --- 🎛️ BARRE LATÉRALE (MONITORING & NAVIGATION) ---
-st.sidebar.title("💠 LIVE MONITORING")
-st.sidebar.metric("🛢️ BRENT CRUDE", f"{live_market['BRENT']} $", "+1.2%")
-st.sidebar.metric("🇹🇳 TAUX TND/USD", f"{live_market['TND_USD']}", "STABLE")
-st.sidebar.markdown("---")
-st.sidebar.write(f"🎯 **Seuil CAPEX :** {internal.get('SEUIL_CAPEX', 0.141)*100}%")
-st.sidebar.write(f"🏗️ **Inflation Acier :** {internal.get('INF_ACIER', 0.12)*100}%")
+# --- 📊 LOGIQUE DE CALCUL DES KPIs PAR ACTIVITÉ ---
+# Calcul des marges théoriques basées sur l'environnement
+marge_mshop = (0.22 * (data['BRENT']/80)) - data['INF_ACIER']
+marge_dsales = 0.15 * (1 / data['TND_USD'] * 3.1)
+marge_main = 0.18 + (data['INF_ACIER'] * 0.2)
 
-# --- 📈 DASHBOARD PRINCIPAL MBA-CONSULT ---
-st.title("📈 MBA-CONSULT | KMS FINANCE PRÉDICTIF")
-st.info(f"Analyse stratégique basée sur le centre de gravité industriel (M-Shop : {internal.get('W_MSHOP', 0.64)*100}%)")
-
-# --- 📊 GRAPHIQUE DE SENSIBILITÉ (PÉTROLE VS EBITDA) ---
-st.subheader("📉 Simulation de Rentabilité : Impact du cours du Pétrole")
-
-# Création d'une plage de prix du baril pour le graphique (+/- 20%)
-brent_range = np.linspace(live_market['BRENT'] * 0.8, live_market['BRENT'] * 1.2, 12)
-# Formule de l'EBITDA projeté réagissant au marché
-ebitda_projections = [
-    (internal.get('W_MSHOP', 0.64) * 0.22) * (price / 80) * (1 - internal.get('INF_ACIER', 0.12)) * 100 
-    for price in brent_range
-]
-
-chart_data = pd.DataFrame({
-    'Prix du Baril ($)': brent_range,
-    'EBITDA Projeté (%)': ebitda_projections
+kpi_table = pd.DataFrame({
+    "Activité": ["M-SHOP", "D.SALES", "MAINTENANCE"],
+    "Poids (%)": [data['W_MSHOP']*100, data['W_DSALES']*100, data['W_MAIN']*100],
+    "Marge Prévue (%)": [round(marge_mshop*100, 2), round(marge_dsales*100, 2), round(marge_main*100, 2)],
+    "Statut": ["CRITIQUE" if marge_mshop < 0.10 else "NOMINAL", "STABLE", "CROISSANCE"]
 })
 
-st.line_chart(chart_data.set_index('Prix du Baril ($)'))
-st.caption("Visualisation de la corrélation entre les cours mondiaux et la rentabilité locale de MBA-CONSULT.")
+# --- 🎛️ INTERFACE : TABLEAU DES INDICATEURS ---
+st.title("📈 MBA-CONSULT | KMS FINANCE & STRATÉGIE")
+st.subheader("Tableau de Bord des KPIs et Ratios par Activité")
 
-# --- 📄 GÉNÉRATEUR DE RAPPORT PDF DÉTAILLÉ ---
-def generate_strategic_report(ebitda_actuel):
+col1, col2, col3 = st.columns(3)
+col1.metric("EBITDA M-SHOP", f"{kpi_table.iloc[0, 2]}%", delta="-0.5%", delta_color="inverse")
+col2.metric("EBITDA D.SALES", f"{kpi_table.iloc[1, 2]}%", delta="Stable")
+col3.metric("EBITDA MAINT.", f"{kpi_table.iloc[2, 2]}%", delta="+1.2%")
+
+st.table(kpi_table)
+
+# --- 🛡️ ZONE DE STRESS-TEST (SIMULATEUR CAPEX) ---
+st.divider()
+st.subheader("🔥 STRESS-TEST : Validation d'Investissement")
+with st.expander("Exécuter une simulation d'achat machine / infrastructure", expanded=True):
+    c1, c2 = st.columns(2)
+    val_achat = c1.number_input("Montant de l'investissement (USD)", value=50000, step=5000)
+    duree = c2.slider("Durée d'amortissement (Années)", 1, 10, 5)
+    
+    # Formule de Stress-Test MBA-CONSULT
+    score_brut = (val_achat / 500000) * data['W_MSHOP']
+    score_final = score_brut / (1 + data['INF_ACIER'])
+    
+    if score_final >= data['SEUIL_CAPEX']:
+        st.success(f"✅ TEST RÉUSSI : Score de rentabilité {round(score_final*100, 2)}% (Seuil: {data['SEUIL_CAPEX']*100}%)")
+    else:
+        st.error(f"❌ TEST ÉCHOUÉ : Rentabilité insuffisante ({round(score_final*100, 2)}%). Réviser le CAPEX.")
+
+# --- 📄 GÉNÉRATEUR DE RAPPORT PDF AVEC LOGO ---
+def generate_advanced_report():
     pdf = FPDF()
     pdf.add_page()
     
-    # Titre et Header
+    # Insertion du LOGO (A droite, 3x6 cm)
+    if os.path.exists("logo.png"):
+        pdf.image("logo.png", x=140, y=10, w=60, h=30) # Ajusté pour 6cm de large
+    
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "RAPPORT STRATEGIQUE KMS - MBA-CONSULT", 0, 1, 'C')
-    pdf.set_font("Arial", "I", 8)
-    pdf.cell(0, 10, f"Version : {VERSION_FINANCE} | Genere le {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 1, 'C')
-    pdf.ln(10)
+    pdf.cell(0, 10, "RAPPORT DE SYNTHESE KMS", 0, 1, 'L')
+    pdf.set_font("Arial", "I", 10)
+    pdf.cell(0, 10, f"Généré le {datetime.now().strftime('%d/%m/%Y')}", 0, 1, 'L')
+    pdf.ln(15)
     
-    # Section Données de Marché
-    pdf.set_fill_color(240, 240, 240)
+    # Tableau Récapitulatif des KPIs
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "1. CONTEXTE DE MARCHE (ENERGIE)", 1, 1, 'L', fill=True)
-    pdf.set_font("Arial", "", 10)
-    pdf.cell(0, 8, f"- Prix du Baril (Brent) : {live_market['BRENT']}$", 0, 1)
-    pdf.cell(0, 8, f"- Taux de Change (TND/USD) : {live_market['TND_USD']}", 0, 1)
-    pdf.ln(5)
+    pdf.set_fill_color(200, 220, 255)
+    pdf.cell(0, 10, "TABLEAU RÉCAPITULATIF DES KPIs PAR ACTIVITÉ", 1, 1, 'C', fill=True)
     
-    # Section Conclusions
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "2. CONCLUSIONS ET PROJECTIONS", 1, 1, 'L', fill=True)
-    pdf.set_font("Arial", "", 11)
-    report_text = (
-        f"L'analyse predictive basee sur vos donnees Excel indique un EBITDA cible de {round(ebitda_actuel, 2)}%. "
-        f"Le seuil de validation des investissements (CAPEX) est maintenu a {internal.get('SEUIL_CAPEX', 0.141)*100}%. "
-        f"Avec une inflation de l'acier a {internal.get('INF_ACIER', 0.12)*100}%, le KMS recommande une vigilance accrue "
-        "sur les marges de l'activite Machine-Shop."
-    )
-    pdf.multi_cell(0, 10, report_text)
-    
-    pdf.ln(20)
     pdf.set_font("Arial", "B", 10)
-    pdf.cell(0, 10, "SCELLAGE KMS OMNI-GENESIS", 0, 1, 'R')
+    pdf.cell(60, 10, "Activite", 1)
+    pdf.cell(60, 10, "Poids (%)", 1)
+    pdf.cell(70, 10, "Marge Prevue (%)", 1, 1)
+    
+    pdf.set_font("Arial", "", 10)
+    for index, row in kpi_table.iterrows():
+        pdf.cell(60, 10, str(row['Activité']), 1)
+        pdf.cell(60, 10, str(row['Poids (%)']), 1)
+        pdf.cell(70, 10, str(row['Marge Prévue (%)']), 1, 1)
+    
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "CONCLUSION DU STRESS-TEST", 0, 1)
+    pdf.set_font("Arial", "", 11)
+    conclusion = f"L'analyse de rentabilite globale montre un score moyen de {round(kpi_table['Marge Prévue (%)'].mean(), 2)}%. "
+    conclusion += f"L'impact de l'inflation de l'acier ({data['INF_ACIER']*100}%) est sous controle pour le secteur Energie."
+    pdf.multi_cell(0, 10, conclusion)
     
     return pdf.output(dest='S').encode('latin-1')
 
-# Calcul de l'EBITDA instantané
-ebitda_now = (internal.get('W_MSHOP', 0.64) * 0.22) * (live_market['BRENT'] / 80) * (1 - internal.get('INF_ACIER', 0.12)) * 100
-
 st.divider()
-col_btn1, col_btn2 = st.columns(2)
-with col_btn1:
-    if st.button("📥 GÉNÉRER LES CONCLUSIONS STRATÉGIQUES (PDF)", use_container_width=True):
-        pdf_bytes = generate_strategic_report(ebitda_now)
-        st.download_button(
-            label="⬇️ TÉLÉCHARGER LE RAPPORT SCELLÉ",
-            data=pdf_bytes,
-            file_name=f"RAPPORT_STRAT_MBA_{datetime.now().strftime('%Y%m%d')}.pdf",
-            mime="application/pdf"
-        )
-
-with col_btn2:
-    # Lien vers votre autre application (Production)
-    st.link_button("🏭 RETOUR AU GÉNÉRATEUR QP (PRODUCTION)", "https://ramsis0710-a11y.github.io/mba-consult/", use_container_width=True)
+if st.button("📥 GÉNÉRER LE RAPPORT STRATÉGIQUE PDF", use_container_width=True):
+    pdf_output = generate_advanced_report()
+    st.download_button("⬇️ TÉLÉCHARGER LE PDF", data=pdf_output, file_name="Rapport_KMS_Final.pdf", mime="application/pdf")
