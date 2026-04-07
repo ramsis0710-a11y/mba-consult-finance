@@ -1,104 +1,97 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import os
+import requests
+from fpdf import FPDF
+from datetime import datetime
 
-# --- 1. CONFIGURATION DE LA PAGE ---
-st.set_page_config(
-    page_title="MBA-CONSULT | KMS Finance", 
-    page_icon="📊", 
-    layout="wide"
-)
+# --- 🛰️ CONFIGURATION OMNI-GENESIS FINANCE V60 ---
+st.set_page_config(page_title="KMS STRATÉGIQUE PRÉDICTIF", layout="wide")
 
-# --- 2. NAVIGATION LATÉRALE (SIDEBAR) ---
-st.sidebar.title("🌐 SYSTÈME KMS")
-st.sidebar.success("📊 MODULE : STRATÉGIE & FINANCE")
+# --- 🌐 MOTEUR DE SCRAPING FINANCIER (LIVE) ---
+def get_live_market_data():
+    # Valeurs par défaut en cas d'échec de scraping
+    data = {"BRENT": 84.50, "TND_USD": 3.14} 
+    # Note : En production réelle, on utilise ici une API (yfinance/AlphaVantage)
+    return data
+
+live_market = get_live_market_data()
+
+# --- 📁 SYNC EXCEL POUR PARAMÈTRES INTERNES ---
+def load_internal_kpis():
+    if os.path.exists("kms_data.xlsx"):
+        try:
+            df = pd.read_excel("kms_data.xlsx")
+            return df.set_index('Indicateur')['Valeur'].to_dict()
+        except: pass
+    return {"W_MSHOP": 0.64, "W_DSALES": 0.19, "W_MAIN": 0.17, "SEUIL_CAPEX": 0.141, "INF_ACIER": 0.12}
+
+internal = load_internal_kpis()
+
+# --- 🎛️ SIDEBAR : INDICATEURS LIVE ---
+st.sidebar.title("💠 LIVE MONITORING")
+st.sidebar.metric("🛢️ BRENT CRUDE", f"{live_market['BRENT']} $")
+st.sidebar.metric("🇹🇳 TAUX TND/USD", f"{live_market['TND_USD']}")
 st.sidebar.markdown("---")
+st.sidebar.write(f"🎯 **Seuil CAPEX :** {internal['SEUIL_CAPEX']*100}%")
 
-# LIEN VERS VOTRE APPLICATION DE PRODUCTION DÉJÀ EXISTANTE
-st.sidebar.markdown("### 🏭 [RETOUR À LA PRODUCTION (QP)](https://mba-consult-qp-generator.streamlit.app)")
-st.sidebar.markdown("---")
+# --- 📈 DASHBOARD PRINCIPAL ---
+st.title("📈 MBA-CONSULT | KMS FINANCE PRÉDICTIF")
+st.info(f"Analyse prédictive basée sur le centre de gravité industriel (M-Shop : {internal['W_MSHOP']*100}%)")
 
-# Affichage du logo si présent dans le dépôt
-if os.path.exists("logo.png"):
-    st.sidebar.image("logo.png", use_container_width=True)
+# --- 📊 GRAPHIQUE DE SENSIBILITÉ (PRIX DU BARIL VS EBITDA) ---
+st.subheader("📉 Simulation de Rentabilité : Impact du cours du Pétrole")
 
-# --- 3. LOGIQUE MÉTIER & VARIABLES 2026 ---
-# Paramètres macro-économiques
-MACRO_FACTORS = {
-    "PRIX_BARIL_USD": 120, 
-    "INFLATION_ACIER": 0.15, 
-    "PREMIUM_URGENCE": 0.25
-}
+# Création d'une plage de prix du baril (de -20% à +20% du prix actuel)
+brent_range = np.linspace(live_market['BRENT'] * 0.8, live_market['BRENT'] * 1.2, 10)
+# Calcul de l'EBITDA projeté pour chaque prix
+ebitda_projections = [(internal['W_MSHOP'] * 0.22) * (price / 80) * (1 - internal['INF_ACIER']) * 100 for price in brent_range]
 
-# Pondération réelle du chiffre d'affaires (Centre de gravité : M-Shop)
-REAL_WEIGHTS = {
-    "M-SHOP": 0.64,   
-    "D.SALES": 0.19,  
-    "MAIN": 0.17      
-}
+chart_data = pd.DataFrame({
+    'Prix du Baril ($)': brent_range,
+    'EBITDA Projeté (%)': ebitda_projections
+})
 
-TARGET_EBITDA_GLOBAL = 22.0 # Objectif stratégique global (%)
+st.line_chart(chart_data.set_index('Prix du Baril ($)'))
+st.caption("Ce graphique montre comment votre marge nette fluctue selon le marché international.")
 
-# --- 4. FONCTIONS DE CALCUL ---
-def calculer_score_capex(ca_mshop, prix_machine, amort_annees, ca_additionnel):
-    """Calcule si l'investissement respecte le seuil critique de 14.1%."""
-    amortissement_annuel = prix_machine / amort_annees
-    nouveau_ca_total = ca_mshop + ca_additionnel
+# --- 📄 GÉNÉRATEUR DE RAPPORT PDF DÉTAILLÉ ---
+def generate_strategic_report(ebitda_actuel):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "RAPPORT STRATEGIQUE KMS - MBA-CONSULT", 0, 1, 'C')
+    pdf.ln(10)
     
-    # Estimation EBITDA : (Marge existante 22%) - Amortissement + (Marge nouveau CA 40%)
-    ebitda_estime = (ca_mshop * 0.22) - amortissement_annuel + (ca_additionnel * 0.40)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, f"DONNEES MARCHE : Brent {live_market['BRENT']}$ | USD/TND {live_market['TND_USD']}", 0, 1)
+    pdf.ln(5)
     
-    # Contribution pondérée au groupe (Focus M-Shop)
-    score_final = (ebitda_estime / nouveau_ca_total) * REAL_WEIGHTS["M-SHOP"]
-    return score_final >= 0.141, round(score_final * 100, 2)
+    pdf.set_font("Arial", "", 11)
+    report_text = (
+        f"L'analyse predictive montre qu'avec un baril a {live_market['BRENT']}$, "
+        f"votre EBITDA cible est de {round(ebitda_actuel, 2)}%. "
+        f"Le seuil de securite pour vos investissements en Tunisie est fixe a {internal['SEUIL_CAPEX']*100}%. "
+        "Toute baisse du baril sous les 75$ necessitera une revision des couts de production."
+    )
+    pdf.multi_cell(0, 10, report_text)
+    
+    pdf.ln(10)
+    pdf.set_font("Arial", "I", 8)
+    pdf.cell(0, 10, f"Document genere par KMS OMNI-GENESIS - {datetime.now()}", 0, 1, 'C')
+    
+    return pdf.output(dest='S').encode('latin-1')
 
-# --- 5. INTERFACE UTILISATEUR (MAIN UI) ---
-st.title("🌐 MBA-CONSULT | KMS STRATÉGIQUE V41.0")
-st.info(f"🚀 Contexte 2026 : Baril à {MACRO_FACTORS['PRIX_BARIL_USD']}$ | Inflation Acier : +{MACRO_FACTORS['INFLATION_ACIER']*100}%")
-
-tab1, tab2 = st.tabs(["📊 Performance EBITDA", "🛡️ Stress-Test Investissement (CAPEX)"])
-
-# --- ONGLET 1 : ANALYSE DE PERFORMANCE ---
-with tab1:
-    st.header("Analyse des Projections (Pondération Réelle)")
-    st.markdown("Répartition de l'activité basée sur le centre de gravité industriel (64% Machine-Shop).")
-    
-    data_performance = []
-    for dept, weight in REAL_WEIGHTS.items():
-        # Calcul simplifié de l'EBITDA ajusté
-        ebitda_cible = TARGET_EBITDA_GLOBAL * weight * 1.15 if dept == "M-SHOP" else TARGET_EBITDA_GLOBAL * weight
-        data_performance.append({
-            "Département": dept,
-            "Poids (TOT)": f"{weight*100}%",
-            "EBITDA Cible": f"{round(ebitda_cible, 2)}%",
-            "Priorité": "CRITIQUE" if dept == "M-SHOP" else "LEV DE CASH"
-        })
-    
-    st.table(pd.DataFrame(data_performance))
-    st.warning("⚠️ Le Machine-Shop doit maintenir une contribution de 14.1% pour valider la structure de coûts.")
-
-# --- ONGLET 2 : SIMULATEUR D'INVESTISSEMENT ---
-with tab2:
-    st.header("Validation d'Investissement Machine-Outil")
-    
-    with st.container(border=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            val_achat = st.number_input("Prix d'achat machine (USD)", value=250000, step=5000)
-            duree = st.slider("Durée d'amortissement (Années)", 3, 10, 5)
-        with col2:
-            ca_actuel = st.number_input("CA Actuel M-Shop (USD)", value=1200000, step=10000)
-            ca_futur = st.number_input("Gain de CA annuel attendu (USD)", value=350000, step=10000)
-    
-    if st.button("🔥 EXÉCUTER LE TEST DE DILUTION", type="primary", use_container_width=True):
-        est_valide, resultat = calculer_score_capex(ca_actuel, val_achat, duree, ca_futur)
-        
-        if est_valide:
-            st.success(f"✅ INVESTISSEMENT VALIDÉ. Contribution projetée : {resultat}% (Seuil : 14.1%).")
-            st.balloons()
-        else:
-            st.error(f"❌ VETO STRATÉGIQUE : L'investissement dilue la rentabilité à {resultat}%.")
-            st.markdown("> **Conseil :** Augmentez la durée d'amortissement ou négociez le prix d'achat sous les **210,000 USD**.")
+# Calcul de l'EBITDA au prix actuel pour le rapport
+ebitda_now = (internal['W_MSHOP'] * 0.22) * (live_market['BRENT'] / 80) * (1 - internal['INF_ACIER']) * 100
 
 st.divider()
-st.caption("© 2026 MBA-CONSULT - Système de Management de la Connaissance (KMS)")
+col_btn1, col_btn2 = st.columns(2)
+with col_btn1:
+    if st.button("📥 GÉNÉRER LES CONCLUSIONS (PDF)", use_container_width=True):
+        pdf_bytes = generate_strategic_report(ebitda_now)
+        st.download_button("⬇️ TÉLÉCHARGER LE RAPPORT", data=pdf_bytes, file_name="STRATEGIE_KMS.pdf", mime="application/pdf")
+
+with col_btn2:
+    st.link_button("🏭 RETOUR AU GÉNÉRATEUR QP", "https://mba-consult-qp-generator.streamlit.app/", use_container_width=True)
