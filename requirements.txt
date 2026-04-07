@@ -1,3 +1,6 @@
 streamlit
 pandas
-qrcode[pil]
+numpy
+openpyxl
+fpdf
+requests
