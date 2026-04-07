@@ -5,8 +5,8 @@ import os
 from fpdf import FPDF
 from datetime import datetime
 
-# --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V70 ---
-VERSION_FINANCE = "V70-STRESS-TEST-INTEGRATED"
+# --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V75 ---
+VERSION_FINANCE = "V75-ULTIMATE-DASHBOARD"
 st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
 # --- 📁 MOTEUR DE DONNÉES (SYNC EXCEL) ---
@@ -25,7 +25,6 @@ def load_internal_kpis():
 data = load_internal_kpis()
 
 # --- 📊 LOGIQUE DE CALCUL DES KPIs PAR ACTIVITÉ ---
-# Calcul des marges théoriques basées sur l'environnement
 marge_mshop = (0.22 * (data['BRENT']/80)) - data['INF_ACIER']
 marge_dsales = 0.15 * (1 / data['TND_USD'] * 3.1)
 marge_main = 0.18 + (data['INF_ACIER'] * 0.2)
@@ -37,7 +36,14 @@ kpi_table = pd.DataFrame({
     "Statut": ["CRITIQUE" if marge_mshop < 0.10 else "NOMINAL", "STABLE", "CROISSANCE"]
 })
 
-# --- 🎛️ INTERFACE : TABLEAU DES INDICATEURS ---
+# --- 🎛️ SIDEBAR : INDICATEURS LIVE MARKET ---
+st.sidebar.title("💠 LIVE MONITORING")
+st.sidebar.metric("🛢️ BRENT CRUDE", f"{data['BRENT']} $")
+st.sidebar.metric("🇹🇳 TAUX TND/USD", f"{data['TND_USD']}")
+st.sidebar.markdown("---")
+st.sidebar.write(f"🎯 **Seuil CAPEX :** {data['SEUIL_CAPEX']*100}%")
+
+# --- 📈 DASHBOARD PRINCIPAL ---
 st.title("📈 MBA-CONSULT | KMS FINANCE & STRATÉGIE")
 st.subheader("Tableau de Bord des KPIs et Ratios par Activité")
 
@@ -48,6 +54,28 @@ col3.metric("EBITDA MAINT.", f"{kpi_table.iloc[2, 2]}%", delta="+1.2%")
 
 st.table(kpi_table)
 
+# --- 📉 GRAPHE DE SIMULATION AUTOMATIQUE (IMPACT BARIL) ---
+st.divider()
+st.subheader("📉 Simulation Dynamique : Impact du Brent sur la Rentabilité")
+
+# Génération de la plage de simulation
+brent_range = np.linspace(data['BRENT'] * 0.7, data['BRENT'] * 1.3, 15)
+
+# Calcul des courbes pour les 3 activités
+sim_mshop = [(0.22 * (p/80) - data['INF_ACIER']) * 100 for p in brent_range]
+sim_dsales = [round(marge_dsales*100, 2)] * len(brent_range) # Stable face au baril
+sim_main = [round(marge_main*100, 2)] * len(brent_range)   # Stable face au baril
+
+df_sim = pd.DataFrame({
+    'Prix du Baril ($)': brent_range,
+    'M-SHOP (%)': sim_mshop,
+    'D.SALES (%)': sim_dsales,
+    'MAINTENANCE (%)': sim_main
+})
+
+st.line_chart(df_sim.set_index('Prix du Baril ($)'))
+st.caption("Ce graphique simule l'évolution de vos marges selon la volatilité du prix du baril international.")
+
 # --- 🛡️ ZONE DE STRESS-TEST (SIMULATEUR CAPEX) ---
 st.divider()
 st.subheader("🔥 STRESS-TEST : Validation d'Investissement")
@@ -56,23 +84,21 @@ with st.expander("Exécuter une simulation d'achat machine / infrastructure", ex
     val_achat = c1.number_input("Montant de l'investissement (USD)", value=50000, step=5000)
     duree = c2.slider("Durée d'amortissement (Années)", 1, 10, 5)
     
-    # Formule de Stress-Test MBA-CONSULT
     score_brut = (val_achat / 500000) * data['W_MSHOP']
     score_final = score_brut / (1 + data['INF_ACIER'])
     
     if score_final >= data['SEUIL_CAPEX']:
         st.success(f"✅ TEST RÉUSSI : Score de rentabilité {round(score_final*100, 2)}% (Seuil: {data['SEUIL_CAPEX']*100}%)")
     else:
-        st.error(f"❌ TEST ÉCHOUÉ : Rentabilité insuffisante ({round(score_final*100, 2)}%). Réviser le CAPEX.")
+        st.error(f"❌ TEST ÉCHOUÉ : Rentabilité insuffisante ({round(score_final*100, 2)}%).")
 
-# --- 📄 GÉNÉRATEUR DE RAPPORT PDF AVEC LOGO ---
+# --- 📄 GÉNÉRATEUR DE RAPPORT PDF ---
 def generate_advanced_report():
     pdf = FPDF()
     pdf.add_page()
     
-    # Insertion du LOGO (A droite, 3x6 cm)
     if os.path.exists("logo.png"):
-        pdf.image("logo.png", x=140, y=10, w=60, h=30) # Ajusté pour 6cm de large
+        pdf.image("logo.png", x=140, y=10, w=60, h=30)
     
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RAPPORT DE SYNTHESE KMS", 0, 1, 'L')
@@ -80,7 +106,6 @@ def generate_advanced_report():
     pdf.cell(0, 10, f"Généré le {datetime.now().strftime('%d/%m/%Y')}", 0, 1, 'L')
     pdf.ln(15)
     
-    # Tableau Récapitulatif des KPIs
     pdf.set_font("Arial", "B", 12)
     pdf.set_fill_color(200, 220, 255)
     pdf.cell(0, 10, "TABLEAU RÉCAPITULATIF DES KPIs PAR ACTIVITÉ", 1, 1, 'C', fill=True)
@@ -98,10 +123,10 @@ def generate_advanced_report():
     
     pdf.ln(10)
     pdf.set_font("Arial", "B", 12)
-    pdf.cell(0, 10, "CONCLUSION DU STRESS-TEST", 0, 1)
+    pdf.cell(0, 10, "CONCLUSION STRATEGIQUE", 0, 1)
     pdf.set_font("Arial", "", 11)
-    conclusion = f"L'analyse de rentabilite globale montre un score moyen de {round(kpi_table['Marge Prévue (%)'].mean(), 2)}%. "
-    conclusion += f"L'impact de l'inflation de l'acier ({data['INF_ACIER']*100}%) est sous controle pour le secteur Energie."
+    conclusion = f"Avec un baril à {data['BRENT']}$ et un USD à {data['TND_USD']} TND, l'EBITDA global est stable. "
+    conclusion += f"Le seuil de rentabilité cible de {data['SEUIL_CAPEX']*100}% est la référence pour tout nouveau CAPEX."
     pdf.multi_cell(0, 10, conclusion)
     
     return pdf.output(dest='S').encode('latin-1')
@@ -109,4 +134,4 @@ def generate_advanced_report():
 st.divider()
 if st.button("📥 GÉNÉRER LE RAPPORT STRATÉGIQUE PDF", use_container_width=True):
     pdf_output = generate_advanced_report()
-    st.download_button("⬇️ TÉLÉCHARGER LE PDF", data=pdf_output, file_name="Rapport_KMS_Final.pdf", mime="application/pdf")
+    st.download_button("⬇️ TÉLÉCHARGER LE PDF", data=pdf_output, file_name="Rapport_KMS_MBA.pdf", mime="application/pdf")
