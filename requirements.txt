@@ -1,8 +1,8 @@
 streamlit
 pandas
 numpy
-openpyxl
-fpdf
 requests
 beautifulsoup4
-lxml
+fpdf2
+matplotlib
+openpyxl
