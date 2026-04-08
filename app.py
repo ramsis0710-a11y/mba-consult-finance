@@ -7,8 +7,8 @@ from bs4 import BeautifulSoup
 from fpdf import FPDF
 from datetime import datetime
 
-# --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V86 ---
-VERSION_FINANCE = "V86-MULTI-ENTITY-INTEGRATED"
+# --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V87 ---
+VERSION_FINANCE = "V87-DUAL-ENTITY-LOGOS"
 st.set_page_config(page_title=f"KMS FINANCE {VERSION_FINANCE}", layout="wide")
 
 # --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & GOOGLE (TEMPS RÉEL) ---
@@ -73,7 +73,8 @@ kpi_table = pd.DataFrame({
 
 # --- 🎛️ SIDEBAR : NAVIGATION & COMMUTATEUR D'ENTITÉ ---
 st.sidebar.title("💠 ARCHIE NAVIGATION")
-# Sélecteur d'entité pour le rapport
+
+# Bouton de sélection d'entité (Modifie le nom et le logo)
 entite_active = st.sidebar.radio("🏢 SÉLECTIONNER L'ENTITÉ :", ["MBA-CONSULT", "GMPI"], index=0)
 
 st.sidebar.markdown("---")
@@ -85,6 +86,7 @@ st.sidebar.metric("🛢️ BRENT (Boursorama)", f"{data['BRENT']} $", delta="LIV
 st.sidebar.metric("🇹🇳 USD / TND", f"{data['TND_USD']}", delta="LIVE")
 st.sidebar.markdown("---")
 st.sidebar.write(f"🎯 **Seuil CAPEX :** {data['SEUIL_CAPEX']*100}%")
+st.sidebar.write(f"🏗️ **Inflation Acier :** {data['INF_ACIER']*100}%")
 
 # --- 📈 DASHBOARD PRINCIPAL ---
 st.title(f"📈 {entite_active} | KMS FINANCE & STRATÉGIE")
@@ -131,8 +133,12 @@ with st.expander("Exécuter une simulation d'achat machine / infrastructure", ex
 def generate_advanced_report(entite):
     pdf = FPDF()
     pdf.add_page()
-    if os.path.exists("logo.png"):
-        pdf.image("logo.png", x=140, y=10, w=60, h=30)
+    
+    # Logique de sélection du logo selon l'entité
+    logo_file = "logo.png" if entite == "MBA-CONSULT" else "logo GMPI.png"
+    
+    if os.path.exists(logo_file):
+        pdf.image(logo_file, x=140, y=10, w=60, h=30)
     
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, f"RAPPORT DE SYNTHESE KMS - {entite}", 0, 1, 'L')
@@ -160,8 +166,10 @@ def generate_advanced_report(entite):
     pdf.cell(0, 10, "CONCLUSIONS STRATEGIQUES (ENERGIE)", 0, 1)
     pdf.set_font("Arial", "", 11)
     conclusion = f"Basé sur un Brent à {data['BRENT']}$ et un cours de change de {data['TND_USD']} TND/USD. "
-    conclusion += f"L'EBITDA prévisionnel calculé pour {entite} est de {round(marge_mshop*100, 2)}% pour le M-SHOP."
+    conclusion += f"L'EBITDA prévisionnel calculé pour {entite} est de {round(marge_mshop*100, 2)}% pour le M-SHOP. "
+    conclusion += f"Tout investissement doit respecter le seuil CAPEX de {data['SEUIL_CAPEX']*100}% dicté par le KMS."
     pdf.multi_cell(0, 10, conclusion)
+    
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
