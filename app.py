@@ -13,7 +13,7 @@ st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
 # --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & BCT (TEMPS RÉEL) ---
 def get_live_market_data():
-    # Valeurs par défaut (Backup interne temporaire)
+    # Valeurs par défaut de sécurité
     market_data = {"BRENT": 84.5, "TND_USD": 3.14}
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
@@ -33,17 +33,23 @@ def get_live_market_data():
         res_curr = requests.get(curr_url, headers=headers, timeout=10)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            # Extraction précise : on cherche la ligne du Dollar et on nettoie la chaîne
-            for row in soup_curr.find_all("tr"):
-                text_content = row.get_text()
-                if "1 Dollar E.U" in text_content:
+            # Correction de l'algorithme de recherche pour cibler précisément la valeur numérique
+            rows = soup_curr.find_all("tr")
+            for row in rows:
+                row_text = row.get_text(strip=True)
+                if "1Dollar E.U" in row_text.replace(" ", ""):
                     cells = row.find_all("td")
                     if len(cells) >= 2:
-                        # Extraction de la valeur numérique pure
-                        raw_val = cells[-1].get_text(strip=True).replace(",", ".")
-                        market_data["TND_USD"] = float(raw_val)
-                        break
-    except Exception as e:
+                        # On cherche la cellule qui contient le nombre (généralement la dernière ou avant-dernière)
+                        for cell in reversed(cells):
+                            val_txt = cell.get_text(strip=True).replace(",", ".")
+                            try:
+                                market_data["TND_USD"] = float(val_txt)
+                                break
+                            except ValueError:
+                                continue
+                    break
+    except:
         pass 
     return market_data
 
@@ -52,7 +58,6 @@ live_market = get_live_market_data()
 # --- 📁 MOTEUR DE DONNÉES (SYNC EXCEL & BACKUP SÉCURITÉ) ---
 def load_internal_kpis():
     file_path = "kms_data.xlsx"
-    # Valeurs de base si tout échoue
     base_kpis = {
         "W_MSHOP": 0.64, "W_DSALES": 0.19, "W_MAIN": 0.17, 
         "SEUIL_CAPEX": 0.141, "INF_ACIER": 0.12, 
@@ -63,7 +68,7 @@ def load_internal_kpis():
         try:
             df = pd.read_excel(file_path)
             excel_data = df.set_index('Indicateur')['Valeur'].to_dict()
-            # Fusion : On donne la priorité au Scraping s'il a réussi, sinon on garde l'Excel
+            # Priorité au Scraping Live pour le calcul dynamique
             excel_data["BRENT"] = live_market["BRENT"]
             excel_data["TND_USD"] = live_market["TND_USD"]
             return excel_data
@@ -111,7 +116,7 @@ col3.metric("EBITDA MAINT.", f"{kpi_table.iloc[2, 2]}%", delta="+1.2%")
 
 st.table(kpi_table)
 
-# --- 📉 GRAPHE DE SIMULATION AUTOMATIQUE (IMPACT BARIL) ---
+# --- 📉 GRAPHE DE SIMULATION AUTOMATIQUE ---
 st.divider()
 st.subheader("📉 Simulation Dynamique : Impact du Brent sur la Rentabilité")
 
@@ -130,7 +135,7 @@ df_sim = pd.DataFrame({
 st.line_chart(df_sim.set_index('Prix du Baril ($)'))
 st.caption("Ce graphique simule l'évolution de vos marges selon la volatilité du prix du baril international.")
 
-# --- 🛡️ ZONE DE STRESS-TEST (SIMULATEUR CAPEX) ---
+# --- 🛡️ ZONE DE STRESS-TEST ---
 st.divider()
 st.subheader("🔥 STRESS-TEST : Validation d'Investissement")
 with st.expander("Exécuter une simulation d'achat machine / infrastructure", expanded=True):
