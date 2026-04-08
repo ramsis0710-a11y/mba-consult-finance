@@ -4,3 +4,5 @@ numpy
 openpyxl
 fpdf
 requests
+beautifulsoup4
+lxml
