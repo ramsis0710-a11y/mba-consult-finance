@@ -252,8 +252,8 @@ def generate_advanced_report(entite):
     except:
         pass
         
-    # Correction de l'erreur AttributeError ici
-    return pdf.output()
+    # Retourne les bytes bruts pour Streamlit
+    return bytes(pdf.output())
 
 st.divider()
 if st.button(f"📥 GÉNÉRER LE RAPPORT STRATÉGIQUE PDF ({entite_selectionnee})", use_container_width=True):
