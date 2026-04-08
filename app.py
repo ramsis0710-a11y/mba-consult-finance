@@ -7,18 +7,15 @@ from bs4 import BeautifulSoup
 from fpdf import FPDF
 from datetime import datetime
 
-# --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V85 ---
-VERSION_FINANCE = "V85-LIVE-BOURSORAMA-INTEGRATED"
-st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
+# --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V86 ---
+VERSION_FINANCE = "V86-MULTI-ENTITY-INTEGRATED"
+st.set_page_config(page_title=f"KMS FINANCE {VERSION_FINANCE}", layout="wide")
 
 # --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & GOOGLE (TEMPS RÉEL) ---
 def get_live_market_data():
-    # Valeurs par défaut (Backup interne temporaire)
     market_data = {"BRENT": 84.5, "TND_USD": 3.14}
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        
-        # 1. Scraping BRENT sur Boursorama
         oil_url = "https://www.boursorama.com/bourse/matieres-premieres/cours/8xBRN/"
         response = requests.get(oil_url, headers=headers, timeout=10)
         if response.status_code == 200:
@@ -28,7 +25,6 @@ def get_live_market_data():
                 raw_price = price_tag.text.replace(" ", "").replace(",", ".").strip()
                 market_data["BRENT"] = float(raw_price)
         
-        # 2. Scraping TND/USD sur Google Finance
         curr_url = "https://www.google.com/search?q=1+usd+to+tnd"
         res_curr = requests.get(curr_url, headers=headers, timeout=10)
         if res_curr.status_code == 200:
@@ -37,7 +33,7 @@ def get_live_market_data():
             if curr_tag:
                 market_data["TND_USD"] = float(curr_tag.get('data-value'))
     except:
-        pass # En cas d'échec, on retourne les valeurs par défaut qui seront écrasées par Excel
+        pass
     return market_data
 
 live_market = get_live_market_data()
@@ -45,18 +41,15 @@ live_market = get_live_market_data()
 # --- 📁 MOTEUR DE DONNÉES (SYNC EXCEL & BACKUP SÉCURITÉ) ---
 def load_internal_kpis():
     file_path = "kms_data.xlsx"
-    # Valeurs de base si tout échoue
     base_kpis = {
         "W_MSHOP": 0.64, "W_DSALES": 0.19, "W_MAIN": 0.17, 
         "SEUIL_CAPEX": 0.141, "INF_ACIER": 0.12, 
         "BRENT": live_market["BRENT"], "TND_USD": live_market["TND_USD"]
     }
-    
     if os.path.exists(file_path):
         try:
             df = pd.read_excel(file_path)
             excel_data = df.set_index('Indicateur')['Valeur'].to_dict()
-            # Fusion : On donne la priorité au Scraping s'il a réussi, sinon on garde l'Excel
             excel_data["BRENT"] = live_market["BRENT"]
             excel_data["TND_USD"] = live_market["TND_USD"]
             return excel_data
@@ -78,8 +71,12 @@ kpi_table = pd.DataFrame({
     "Statut": ["CRITIQUE" if marge_mshop < 0.10 else "NOMINAL", "STABLE", "CROISSANCE"]
 })
 
-# --- 🎛️ SIDEBAR : NAVIGATION & LIVE MONITORING ---
+# --- 🎛️ SIDEBAR : NAVIGATION & COMMUTATEUR D'ENTITÉ ---
 st.sidebar.title("💠 ARCHIE NAVIGATION")
+# Sélecteur d'entité pour le rapport
+entite_active = st.sidebar.radio("🏢 SÉLECTIONNER L'ENTITÉ :", ["MBA-CONSULT", "GMPI"], index=0)
+
+st.sidebar.markdown("---")
 st.sidebar.link_button("🚀 ACCÈS PRODUCTION (MBA-QP)", "https://ramsis0710-a11y.github.io/mba-consult/", use_container_width=True)
 
 st.sidebar.markdown("---")
@@ -88,10 +85,9 @@ st.sidebar.metric("🛢️ BRENT (Boursorama)", f"{data['BRENT']} $", delta="LIV
 st.sidebar.metric("🇹🇳 USD / TND", f"{data['TND_USD']}", delta="LIVE")
 st.sidebar.markdown("---")
 st.sidebar.write(f"🎯 **Seuil CAPEX :** {data['SEUIL_CAPEX']*100}%")
-st.sidebar.write(f"🏗️ **Inflation Acier :** {data['INF_ACIER']*100}%")
 
 # --- 📈 DASHBOARD PRINCIPAL ---
-st.title("📈 MBA-CONSULT | KMS FINANCE & STRATÉGIE")
+st.title(f"📈 {entite_active} | KMS FINANCE & STRATÉGIE")
 st.subheader("Tableau de Bord des KPIs et Ratios par Activité")
 
 col1, col2, col3 = st.columns(3)
@@ -101,10 +97,9 @@ col3.metric("EBITDA MAINT.", f"{kpi_table.iloc[2, 2]}%", delta="+1.2%")
 
 st.table(kpi_table)
 
-# --- 📉 GRAPHE DE SIMULATION AUTOMATIQUE (IMPACT BARIL) ---
+# --- 📉 GRAPHE DE SIMULATION AUTOMATIQUE ---
 st.divider()
 st.subheader("📉 Simulation Dynamique : Impact du Brent sur la Rentabilité")
-
 brent_range = np.linspace(data['BRENT'] * 0.7, data['BRENT'] * 1.3, 15)
 sim_mshop = [(0.22 * (p/80) - data['INF_ACIER']) * 100 for p in brent_range]
 sim_dsales = [round(marge_dsales*100, 2)] * len(brent_range)
@@ -116,36 +111,31 @@ df_sim = pd.DataFrame({
     'D.SALES (%)': sim_dsales,
     'MAINTENANCE (%)': sim_main
 })
-
 st.line_chart(df_sim.set_index('Prix du Baril ($)'))
-st.caption("Ce graphique simule l'évolution de vos marges selon la volatilité du prix du baril international.")
 
-# --- 🛡️ ZONE DE STRESS-TEST (SIMULATEUR CAPEX) ---
+# --- 🛡️ ZONE DE STRESS-TEST ---
 st.divider()
 st.subheader("🔥 STRESS-TEST : Validation d'Investissement")
 with st.expander("Exécuter une simulation d'achat machine / infrastructure", expanded=True):
     c1, c2 = st.columns(2)
     val_achat = c1.number_input("Montant de l'investissement (USD)", value=50000, step=5000)
     duree = c2.slider("Durée d'amortissement (Années)", 1, 10, 5)
-    
     score_brut = (val_achat / 500000) * data['W_MSHOP']
     score_final = score_brut / (1 + data['INF_ACIER'])
-    
     if score_final >= data['SEUIL_CAPEX']:
         st.success(f"✅ TEST RÉUSSI : Score de rentabilité {round(score_final*100, 2)}% (Seuil: {data['SEUIL_CAPEX']*100}%)")
     else:
         st.error(f"❌ TEST ÉCHOUÉ : Rentabilité insuffisante ({round(score_final*100, 2)}%).")
 
 # --- 📄 GÉNÉRATEUR DE RAPPORT PDF ---
-def generate_advanced_report():
+def generate_advanced_report(entite):
     pdf = FPDF()
     pdf.add_page()
-    
     if os.path.exists("logo.png"):
         pdf.image("logo.png", x=140, y=10, w=60, h=30)
     
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "RAPPORT DE SYNTHESE KMS - MBA CONSULT", 0, 1, 'L')
+    pdf.cell(0, 10, f"RAPPORT DE SYNTHESE KMS - {entite}", 0, 1, 'L')
     pdf.set_font("Arial", "I", 10)
     pdf.cell(0, 10, f"Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}", 0, 1, 'L')
     pdf.ln(15)
@@ -170,13 +160,11 @@ def generate_advanced_report():
     pdf.cell(0, 10, "CONCLUSIONS STRATEGIQUES (ENERGIE)", 0, 1)
     pdf.set_font("Arial", "", 11)
     conclusion = f"Basé sur un Brent à {data['BRENT']}$ et un cours de change de {data['TND_USD']} TND/USD. "
-    conclusion += f"L'EBITDA prévisionnel du Machine Shop est de {round(marge_mshop*100, 2)}%. "
-    conclusion += f"Tout investissement doit respecter le seuil CAPEX de {data['SEUIL_CAPEX']*100}% dicté par le KMS."
+    conclusion += f"L'EBITDA prévisionnel calculé pour {entite} est de {round(marge_mshop*100, 2)}% pour le M-SHOP."
     pdf.multi_cell(0, 10, conclusion)
-    
     return pdf.output(dest='S').encode('latin-1')
 
 st.divider()
-if st.button("📥 GÉNÉRER LE RAPPORT STRATÉGIQUE PDF", use_container_width=True):
-    pdf_output = generate_advanced_report()
-    st.download_button("⬇️ TÉLÉCHARGER LE PDF", data=pdf_output, file_name="Rapport_KMS_Final.pdf", mime="application/pdf")
+if st.button(f"📥 GÉNÉRER LE RAPPORT STRATÉGIQUE PDF ({entite_active})", use_container_width=True):
+    pdf_output = generate_advanced_report(entite_active)
+    st.download_button("⬇️ TÉLÉCHARGER LE PDF", data=pdf_output, file_name=f"Rapport_KMS_{entite_active}.pdf", mime="application/pdf")
