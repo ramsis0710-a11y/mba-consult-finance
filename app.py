@@ -8,18 +8,17 @@ from fpdf import FPDF
 from datetime import datetime
 
 # --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V85 ---
-VERSION_FINANCE = "V85-LIVE-BOURSORAMA-INTEGRATED"
+VERSION_FINANCE = "V85-LIVE-BOURSORAMA-INVESTING"
 st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
-# --- 🌐 MOTEUR DE SCRAPING INVESTING & BOURSORAMA (TEMPS RÉEL) ---
+# --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & INVESTING (TEMPS RÉEL) ---
 def get_live_market_data():
     # Valeurs par défaut (Backup interne temporaire)
     market_data = {"BRENT": 84.5, "TND_USD": 3.14}
     try:
-        # Headers plus complets pour simuler un navigateur réel (nécessaire pour Investing.com)
+        # Headers complets pour éviter les blocages sur Investing.com
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         
         # 1. Scraping BRENT sur Boursorama
@@ -32,19 +31,19 @@ def get_live_market_data():
                 raw_price = price_tag.text.replace(" ", "").replace(",", ".").strip()
                 market_data["BRENT"] = float(raw_price)
         
-        # 2. Scraping USD/TND sur INVESTING.COM (Actualisation instantanée)
+        # 2. Scraping USD/TND sur INVESTING.COM (Instruction utilisateur)
         curr_url = "https://fr.investing.com/currencies/usd-tnd"
         res_curr = requests.get(curr_url, headers=headers, timeout=10)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            # Recherche du sélecteur de prix temps réel sur Investing
+            # Recherche du tag data-test spécifique à Investing pour le prix en direct
             curr_tag = soup_curr.find("span", {"data-test": "instrument-price-last"})
             if curr_tag:
-                # Nettoyage de la valeur (remplacement de la virgule par le point)
+                # Nettoyage : Investing utilise parfois des virgules pour les milliers ou séparateurs
                 val_text = curr_tag.text.replace(".", "").replace(",", ".").strip()
                 market_data["TND_USD"] = float(val_text)
     except:
-        pass # En cas d'échec, on retourne les valeurs par défaut
+        pass 
     return market_data
 
 live_market = get_live_market_data()
@@ -63,7 +62,7 @@ def load_internal_kpis():
         try:
             df = pd.read_excel(file_path)
             excel_data = df.set_index('Indicateur')['Valeur'].to_dict()
-            # Fusion : On donne la priorité au Scraping s'il a réussi, sinon on garde l'Excel
+            # Priorité absolue au Scraping Live pour les variables volatiles
             excel_data["BRENT"] = live_market["BRENT"]
             excel_data["TND_USD"] = live_market["TND_USD"]
             return excel_data
@@ -111,7 +110,7 @@ col3.metric("EBITDA MAINT.", f"{kpi_table.iloc[2, 2]}%", delta="+1.2%")
 
 st.table(kpi_table)
 
-# --- 📉 GRAPHE DE SIMULATION AUTOMATIQUE (IMPACT BARIL) ---
+# --- 📉 GRAPHE DE SIMULATION AUTOMATIQUE ---
 st.divider()
 st.subheader("📉 Simulation Dynamique : Impact du Brent sur la Rentabilité")
 
@@ -128,8 +127,9 @@ df_sim = pd.DataFrame({
 })
 
 st.line_chart(df_sim.set_index('Prix du Baril ($)'))
+st.caption("Ce graphique simule l'évolution de vos marges selon la volatilité du prix du baril international.")
 
-# --- 🛡️ ZONE DE STRESS-TEST (SIMULATEUR CAPEX) ---
+# --- 🛡️ ZONE DE STRESS-TEST ---
 st.divider()
 st.subheader("🔥 STRESS-TEST : Validation d'Investissement")
 with st.expander("Exécuter une simulation d'achat machine / infrastructure", expanded=True):
@@ -151,7 +151,6 @@ def generate_advanced_report(entite):
     pdf.add_page()
     
     logo_path = "logo.png" if entite == "MBA-CONSULT" else "logo GMPI.png"
-    
     if os.path.exists(logo_path):
         pdf.image(logo_path, x=140, y=10, w=60, h=30)
     
