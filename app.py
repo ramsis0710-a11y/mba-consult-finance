@@ -11,12 +11,16 @@ from datetime import datetime
 VERSION_FINANCE = "V85-LIVE-BOURSORAMA-INTEGRATED"
 st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
-# --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & GOOGLE (TEMPS RÉEL) ---
+# --- 🌐 MOTEUR DE SCRAPING INVESTING & BOURSORAMA (TEMPS RÉEL) ---
 def get_live_market_data():
     # Valeurs par défaut (Backup interne temporaire)
     market_data = {"BRENT": 84.5, "TND_USD": 3.14}
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        # Headers plus complets pour simuler un navigateur réel (nécessaire pour Investing.com)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7'
+        }
         
         # 1. Scraping BRENT sur Boursorama
         oil_url = "https://www.boursorama.com/bourse/matieres-premieres/cours/8xBRN/"
@@ -28,16 +32,19 @@ def get_live_market_data():
                 raw_price = price_tag.text.replace(" ", "").replace(",", ".").strip()
                 market_data["BRENT"] = float(raw_price)
         
-        # 2. Scraping TND/USD sur Google Finance
-        curr_url = "https://www.google.com/search?q=1+usd+to+tnd"
+        # 2. Scraping USD/TND sur INVESTING.COM (Actualisation instantanée)
+        curr_url = "https://fr.investing.com/currencies/usd-tnd"
         res_curr = requests.get(curr_url, headers=headers, timeout=10)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            curr_tag = soup_curr.find("span", class_="DFlfde swH7Fd")
+            # Recherche du sélecteur de prix temps réel sur Investing
+            curr_tag = soup_curr.find("span", {"data-test": "instrument-price-last"})
             if curr_tag:
-                market_data["TND_USD"] = float(curr_tag.get('data-value'))
+                # Nettoyage de la valeur (remplacement de la virgule par le point)
+                val_text = curr_tag.text.replace(".", "").replace(",", ".").strip()
+                market_data["TND_USD"] = float(val_text)
     except:
-        pass # En cas d'échec, on retourne les valeurs par défaut qui seront écrasées par Excel
+        pass # En cas d'échec, on retourne les valeurs par défaut
     return market_data
 
 live_market = get_live_market_data()
@@ -80,17 +87,15 @@ kpi_table = pd.DataFrame({
 
 # --- 🎛️ SIDEBAR : NAVIGATION & LIVE MONITORING ---
 st.sidebar.title("💠 ARCHIE NAVIGATION")
-# Correction du lien de basculement vers production
 st.sidebar.link_button("🚀 ACCÈS PRODUCTION (MBA-QP)", "https://mba-consult-qp-generator.streamlit.app/", use_container_width=True)
 
 st.sidebar.markdown("---")
-# Bouton pour basculer entre MBA-CONSULT et GMPI
 entite_selectionnee = st.sidebar.radio("🏢 SÉLECTIONNER L'ENTITÉ :", ["MBA-CONSULT", "GMPI"], index=0)
 
 st.sidebar.markdown("---")
 st.sidebar.title("🌐 LIVE MARKET DATA")
 st.sidebar.metric("🛢️ BRENT (Boursorama)", f"{data['BRENT']} $", delta="LIVE")
-st.sidebar.metric("🇹🇳 USD / TND", f"{data['TND_USD']}", delta="LIVE")
+st.sidebar.metric("🇹🇳 USD / TND (Investing)", f"{data['TND_USD']}", delta="LIVE")
 st.sidebar.markdown("---")
 st.sidebar.write(f"🎯 **Seuil CAPEX :** {data['SEUIL_CAPEX']*100}%")
 st.sidebar.write(f"🏗️ **Inflation Acier :** {data['INF_ACIER']*100}%")
@@ -123,7 +128,6 @@ df_sim = pd.DataFrame({
 })
 
 st.line_chart(df_sim.set_index('Prix du Baril ($)'))
-st.caption("Ce graphique simule l'évolution de vos marges selon la volatilité du prix du baril international.")
 
 # --- 🛡️ ZONE DE STRESS-TEST (SIMULATEUR CAPEX) ---
 st.divider()
@@ -146,7 +150,6 @@ def generate_advanced_report(entite):
     pdf = FPDF()
     pdf.add_page()
     
-    # Choix dynamique du logo
     logo_path = "logo.png" if entite == "MBA-CONSULT" else "logo GMPI.png"
     
     if os.path.exists(logo_path):
