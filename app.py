@@ -33,18 +33,18 @@ def get_live_market_data():
         res_curr = requests.get(curr_url, headers=headers, timeout=10)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            # Recherche de la ligne contenant "1 Dollar E.U" dans le tableau des cours
-            rows = soup_curr.find_all("tr")
-            for row in rows:
-                if "Dollar E.U" in row.text:
+            # Extraction précise : on cherche la ligne du Dollar et on nettoie la chaîne
+            for row in soup_curr.find_all("tr"):
+                text_content = row.get_text()
+                if "1 Dollar E.U" in text_content:
                     cells = row.find_all("td")
                     if len(cells) >= 2:
-                        # On récupère la valeur numérique (généralement la 2ème ou 3ème colonne selon le tableau)
-                        raw_val = cells[-1].text.strip().replace(",", ".")
+                        # Extraction de la valeur numérique pure
+                        raw_val = cells[-1].get_text(strip=True).replace(",", ".")
                         market_data["TND_USD"] = float(raw_val)
                         break
-    except:
-        pass # En cas d'échec, on retourne les valeurs par défaut
+    except Exception as e:
+        pass 
     return market_data
 
 live_market = get_live_market_data()
