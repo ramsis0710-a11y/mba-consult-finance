@@ -6,6 +6,7 @@ import requests
 from bs4 import BeautifulSoup
 from fpdf import FPDF
 from datetime import datetime
+import re
 
 # --- 🛡️ CONFIGURATION OMNI-GENESIS FINANCE V85 ---
 VERSION_FINANCE = "V85-LIVE-BCT-INTEGRATED"
@@ -13,10 +14,10 @@ st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
 # --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & DINAR TUNISIEN (TEMPS RÉEL) ---
 def get_live_market_data():
-    # Valeurs par défaut (Backup interne temporaire)
+    # Valeurs par défaut de secours
     market_data = {"BRENT": 84.5, "TND_USD": 3.14}
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         
         # 1. Scraping BRENT sur Boursorama
         oil_url = "https://www.boursorama.com/bourse/matieres-premieres/cours/8xBRN/"
@@ -28,23 +29,27 @@ def get_live_market_data():
                 raw_price = price_tag.text.replace(" ", "").replace(",", ".").strip()
                 market_data["BRENT"] = float(raw_price)
         
-        # 2. Scraping USD/TND sur le nouveau site DINAR TUNISIEN (Source BCT)
+        # 2. Scraping USD/TND sur DINAR TUNISIEN (Source BCT)
         curr_url = "https://www.dinartunisien.com/fr/banque/banque-centrale-tunisie"
         res_curr = requests.get(curr_url, headers=headers, timeout=10)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            # On cherche la ligne contenant le Dollar dans le tableau des devises
-            rows = soup_curr.find_all("tr")
+            # Extraction précise de la ligne USD dans le tableau de la Banque Centrale
+            rows = soup_curr.select("div.view-cours-de-change-banque-centrale-de-tunisie table tr")
             for row in rows:
-                if "USD" in row.text or "Dollar" in row.text:
+                text = row.get_text()
+                if "USD" in text or "Dollar" in text:
                     cells = row.find_all("td")
-                    if len(cells) >= 2:
-                        # Extraction de la valeur numérique (généralement la 2ème ou 3ème colonne)
-                        # On nettoie pour ne garder que les chiffres et le point
-                        raw_val = cells[-1].text.strip().replace(",", ".")
-                        market_data["TND_USD"] = float(raw_val)
-                        break
-    except:
+                    if cells:
+                        # On récupère le texte de la dernière cellule (le cours)
+                        raw_val = cells[-1].get_text(strip=True).replace(",", ".")
+                        # Extraction du nombre uniquement (pour éviter les symboles ou textes parasites)
+                        numeric_val = re.findall(r"[-+]?\d*\.\d+|\d+", raw_val)
+                        if numeric_val:
+                            market_data["TND_USD"] = float(numeric_val[0])
+                            break
+    except Exception as e:
+        # En cas d'erreur critique de connexion, on garde le 3.14 pour ne pas faire planter l'app
         pass 
     return market_data
 
