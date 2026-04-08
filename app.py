@@ -11,9 +11,9 @@ from datetime import datetime
 VERSION_FINANCE = "V85-LIVE-BCT-INTEGRATED"
 st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
-# --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & BCT (TEMPS RÉEL) ---
+# --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & DINAR TUNISIEN (TEMPS RÉEL) ---
 def get_live_market_data():
-    # Valeurs par défaut de sécurité
+    # Valeurs par défaut (Backup interne temporaire)
     market_data = {"BRENT": 84.5, "TND_USD": 3.14}
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
@@ -28,27 +28,22 @@ def get_live_market_data():
                 raw_price = price_tag.text.replace(" ", "").replace(",", ".").strip()
                 market_data["BRENT"] = float(raw_price)
         
-        # 2. Scraping USD/TND sur le site de la BANQUE CENTRALE DE TUNISIE (BCT)
-        curr_url = "https://www.bct.gov.tn/bct/siteprod/cours.jsp"
+        # 2. Scraping USD/TND sur le nouveau site DINAR TUNISIEN (Source BCT)
+        curr_url = "https://www.dinartunisien.com/fr/banque/banque-centrale-tunisie"
         res_curr = requests.get(curr_url, headers=headers, timeout=10)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            # Correction de l'algorithme de recherche pour cibler précisément la valeur numérique
+            # On cherche la ligne contenant le Dollar dans le tableau des devises
             rows = soup_curr.find_all("tr")
             for row in rows:
-                row_text = row.get_text(strip=True)
-                if "1Dollar E.U" in row_text.replace(" ", ""):
+                if "USD" in row.text or "Dollar" in row.text:
                     cells = row.find_all("td")
                     if len(cells) >= 2:
-                        # On cherche la cellule qui contient le nombre (généralement la dernière ou avant-dernière)
-                        for cell in reversed(cells):
-                            val_txt = cell.get_text(strip=True).replace(",", ".")
-                            try:
-                                market_data["TND_USD"] = float(val_txt)
-                                break
-                            except ValueError:
-                                continue
-                    break
+                        # Extraction de la valeur numérique (généralement la 2ème ou 3ème colonne)
+                        # On nettoie pour ne garder que les chiffres et le point
+                        raw_val = cells[-1].text.strip().replace(",", ".")
+                        market_data["TND_USD"] = float(raw_val)
+                        break
     except:
         pass 
     return market_data
@@ -68,7 +63,6 @@ def load_internal_kpis():
         try:
             df = pd.read_excel(file_path)
             excel_data = df.set_index('Indicateur')['Valeur'].to_dict()
-            # Priorité au Scraping Live pour le calcul dynamique
             excel_data["BRENT"] = live_market["BRENT"]
             excel_data["TND_USD"] = live_market["TND_USD"]
             return excel_data
@@ -100,7 +94,7 @@ entite_selectionnee = st.sidebar.radio("🏢 SÉLECTIONNER L'ENTITÉ :", ["MBA-C
 st.sidebar.markdown("---")
 st.sidebar.title("🌐 LIVE MARKET DATA")
 st.sidebar.metric("🛢️ BRENT (Boursorama)", f"{data['BRENT']} $", delta="LIVE")
-st.sidebar.metric("🇹🇳 USD / TND (BCT)", f"{data['TND_USD']}", delta="LIVE")
+st.sidebar.metric("🇹🇳 USD / TND (LIVE)", f"{data['TND_USD']}", delta="LIVE")
 st.sidebar.markdown("---")
 st.sidebar.write(f"🎯 **Seuil CAPEX :** {data['SEUIL_CAPEX']*100}%")
 st.sidebar.write(f"🏗️ **Inflation Acier :** {data['INF_ACIER']*100}%")
@@ -133,7 +127,6 @@ df_sim = pd.DataFrame({
 })
 
 st.line_chart(df_sim.set_index('Prix du Baril ($)'))
-st.caption("Ce graphique simule l'évolution de vos marges selon la volatilité du prix du baril international.")
 
 # --- 🛡️ ZONE DE STRESS-TEST ---
 st.divider()
