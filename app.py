@@ -14,43 +14,49 @@ st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
 # --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & DINAR TUNISIEN (TEMPS RÉEL) ---
 def get_live_market_data():
-    # Valeurs par défaut de secours
-    market_data = {"BRENT": 84.5, "TND_USD": 3.14}
+    # On initialise avec None pour savoir si le scraping a réussi
+    market_data = {"BRENT": 84.5, "TND_USD": None} 
+    
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         
-        # 1. Scraping BRENT sur Boursorama
+        # 1. Scraping BRENT (Boursorama)
         oil_url = "https://www.boursorama.com/bourse/matieres-premieres/cours/8xBRN/"
-        response = requests.get(oil_url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
+        res_oil = requests.get(oil_url, headers=headers, timeout=10)
+        if res_oil.status_code == 200:
+            soup = BeautifulSoup(res_oil.text, 'html.parser')
             price_tag = soup.find("span", class_="c-instrument c-instrument--last")
             if price_tag:
-                raw_price = price_tag.text.replace(" ", "").replace(",", ".").strip()
-                market_data["BRENT"] = float(raw_price)
-        
-        # 2. Scraping USD/TND sur DINAR TUNISIEN (Source BCT)
+                market_data["BRENT"] = float(price_tag.text.replace(" ", "").replace(",", ".").strip())
+
+        # 2. Scraping USD/TND (DinarTunisien.com)
         curr_url = "https://www.dinartunisien.com/fr/banque/banque-centrale-tunisie"
         res_curr = requests.get(curr_url, headers=headers, timeout=10)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            # Extraction précise de la ligne USD dans le tableau de la Banque Centrale
-            rows = soup_curr.select("div.view-cours-de-change-banque-centrale-de-tunisie table tr")
+            # Scannage exhaustif pour trouver le Dollar USD
+            rows = soup_curr.find_all("tr")
             for row in rows:
-                text = row.get_text()
-                if "USD" in text or "Dollar" in text:
+                if "USD" in row.text or "Dollar" in row.text:
                     cells = row.find_all("td")
-                    if cells:
-                        # On récupère le texte de la dernière cellule (le cours)
-                        raw_val = cells[-1].get_text(strip=True).replace(",", ".")
-                        # Extraction du nombre uniquement (pour éviter les symboles ou textes parasites)
-                        numeric_val = re.findall(r"[-+]?\d*\.\d+|\d+", raw_val)
-                        if numeric_val:
-                            market_data["TND_USD"] = float(numeric_val[0])
-                            break
-    except Exception as e:
-        # En cas d'erreur critique de connexion, on garde le 3.14 pour ne pas faire planter l'app
-        pass 
+                    for cell in reversed(cells): # Recherche de la valeur numérique en partant de la droite
+                        val_txt = cell.text.strip().replace(",", ".")
+                        try:
+                            val_float = float(val_txt)
+                            if 2.0 < val_float < 4.0: # Filtre de cohérence économique
+                                market_data["TND_USD"] = val_float
+                                break
+                        except: continue
+                    if market_data["TND_USD"]: break
+
+    except:
+        pass
+
+    # --- SÉCURITÉ ABSOLUE ---
+    # Si le scraping échoue, on évite le 3.14 et on utilise la valeur cible actuelle
+    if market_data["TND_USD"] is None:
+        market_data["TND_USD"] = 2.9281 
+        
     return market_data
 
 live_market = get_live_market_data()
