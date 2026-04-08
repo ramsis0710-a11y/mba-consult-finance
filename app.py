@@ -252,7 +252,8 @@ def generate_advanced_report(entite):
     except:
         pass
         
-    return pdf.output(dest='S').encode('latin-1')
+    # Correction de l'erreur AttributeError ici
+    return pdf.output()
 
 st.divider()
 if st.button(f"📥 GÉNÉRER LE RAPPORT STRATÉGIQUE PDF ({entite_selectionnee})", use_container_width=True):
