@@ -88,11 +88,16 @@ marge_mshop = (0.22 * (data['BRENT']/80)) - data['INF_ACIER']
 marge_dsales = 0.15 * (1 / data['TND_USD'] * 3.1)
 marge_main = 0.18 + (data['INF_ACIER'] * 0.2)
 
+# --- MISE À JOUR LOGIQUE SELON POLITIQUE COMMERCIALE ---
+status_mshop = "CONFORME" if marge_mshop >= 0.20 else "ALERTE RENTABILITÉ"
+status_dsales = "CONFORME" if marge_dsales <= 0.10 else "HORS STRATÉGIE"
+status_main = "CONFORME" if marge_main >= 0.25 else "SOUS-PERFORMANCE"
+
 kpi_table = pd.DataFrame({
     "Activité": ["M-SHOP", "D.SALES", "MAINTENANCE"],
     "Poids (%)": [data['W_MSHOP']*100, data['W_DSALES']*100, data['W_MAIN']*100],
     "Marge Prévue (%)": [round(marge_mshop*100, 2), round(marge_dsales*100, 2), round(marge_main*100, 2)],
-    "Statut": ["CRITIQUE" if marge_mshop < 0.10 else "NOMINAL", "STABLE", "CROISSANCE"]
+    "Statut": [status_mshop, status_dsales, status_main]
 })
 
 # --- 🎛️ SIDEBAR : NAVIGATION & LIVE MONITORING ---
@@ -115,9 +120,9 @@ st.title(f"📈 {entite_selectionnee} | KMS FINANCE & STRATÉGIE")
 st.subheader("Tableau de Bord des KPIs et Ratios par Activité")
 
 col1, col2, col3 = st.columns(3)
-col1.metric("EBITDA M-SHOP", f"{kpi_table.iloc[0, 2]}%", delta="-0.5%", delta_color="inverse")
-col2.metric("EBITDA D.SALES", f"{kpi_table.iloc[1, 2]}%", delta="Stable")
-col3.metric("EBITDA MAINT.", f"{kpi_table.iloc[2, 2]}%", delta="+1.2%")
+col1.metric("EBITDA M-SHOP", f"{kpi_table.iloc[0, 2]}%", delta=status_mshop)
+col2.metric("EBITDA D.SALES", f"{kpi_table.iloc[1, 2]}%", delta=status_dsales)
+col3.metric("EBITDA MAINT.", f"{kpi_table.iloc[2, 2]}%", delta=status_main)
 
 st.table(kpi_table)
 
