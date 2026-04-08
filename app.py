@@ -214,9 +214,9 @@ def generate_advanced_report(entite):
     pdf.cell(0, 10, "SIMULATION DYNAMIQUE : IMPACT DU BRENT SUR LA RENTABILITE", 0, 1)
     
     plt.figure(figsize=(8, 4))
-    plt.plot(df_sim['Prix du Baril ($)'], df_sim['M-SHOP (%)'], label='M-SHOP', color='blue')
-    plt.plot(df_sim['Prix du Baril ($)'], df_sim['D.SALES (%)'], label='D.SALES', color='green')
-    plt.plot(df_sim['Prix du Baril ($)'], df_sim['MAINTENANCE (%)'], label='MAINTENANCE', color='red')
+    plt.plot(brent_range, sim_mshop, label='M-SHOP', color='blue')
+    plt.plot(brent_range, sim_dsales, label='D.SALES', color='green')
+    plt.plot(brent_range, sim_main, label='MAINTENANCE', color='red')
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
     plt.xlabel('Prix du Baril ($)')
@@ -224,6 +224,7 @@ def generate_advanced_report(entite):
     
     img_buf = io.BytesIO()
     plt.savefig(img_buf, format='png', bbox_inches='tight')
+    img_buf.seek(0)
     pdf.image(img_buf, x=15, w=180)
     plt.close()
     
@@ -237,12 +238,12 @@ def generate_advanced_report(entite):
     conclusion += f"Tout investissement doit respecter le seuil CAPEX de {data['SEUIL_CAPEX']*100}%."
     pdf.multi_cell(0, 8, conclusion)
     
-    # Signature et QR Code à 10mm du fond (Y=287 environ pour A4)
+    # Signature et QR Code à 10mm du fond
     pdf.set_y(-35)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(0, 5, "Le responsable KMS", 0, 1, 'R')
     
-    # QR Code (Utilisation d'une API de génération rapide)
+    # QR Code
     qr_url = f"https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl={ref_full}"
     try:
         qr_content = requests.get(qr_url).content
