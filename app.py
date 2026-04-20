@@ -16,13 +16,13 @@ import string
 VERSION_FINANCE = "V85-LIVE-BCT-INTEGRATED"
 st.set_page_config(page_title=f"MBA-CONSULT {VERSION_FINANCE}", layout="wide")
 
-# --- 🌐 MOTEUR DE SCRAPING BOURSORAMA & INVESTING (TEMPS RÉEL) ---
+# --- 🌐 MOTEUR DE SCRAPING BOURSORAMA (TEMPS RÉEL) ---
 def get_live_market_data():
     # On initialise avec None pour savoir si le scraping a réussi
     market_data = {"BRENT": 84.5, "TND_USD": None} 
     
     try:
-        # Headers plus complets pour simuler un navigateur et éviter les blocages
+        # Headers complets pour garantir l'accès
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7'
@@ -37,18 +37,18 @@ def get_live_market_data():
             if price_tag:
                 market_data["BRENT"] = float(price_tag.text.replace(" ", "").replace(",", ".").strip())
 
-        # 2. Scraping USD/TND (Investing.com)
-        curr_url = "https://www.investing.com/currencies/usd-tnd"
+        # 2. Scraping USD/TND (Boursorama - Spécifique)
+        curr_url = "https://www.boursorama.com/bourse/devises/taux-de-change-dollar-dinartunisien-USD-TND/"
         res_curr = requests.get(curr_url, headers=headers, timeout=15)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            # Extraction dynamique du dernier cours USD/TND
-            price_tag_curr = soup_curr.find("span", {"data-test": "instrument-last-price"})
+            # Extraction du cours via la classe standard Boursorama
+            price_tag_curr = soup_curr.find("span", class_="c-instrument c-instrument--last")
             if price_tag_curr:
-                val_txt = price_tag_curr.text.strip().replace(",", ".")
+                val_txt = price_tag_curr.text.strip().replace(" ", "").replace(",", ".")
                 try:
                     val_float = float(val_txt)
-                    if 2.0 < val_float < 4.5: # Filtre de cohérence élargi
+                    if 2.0 < val_float < 4.5: # Filtre de cohérence économique
                         market_data["TND_USD"] = val_float
                 except:
                     pass
@@ -57,7 +57,6 @@ def get_live_market_data():
         pass
 
     # --- SÉCURITÉ ABSOLUE ---
-    # Si le scraping échoue, on utilise la valeur de référence dynamique
     if market_data["TND_USD"] is None:
         market_data["TND_USD"] = 3.1250 
         
@@ -92,7 +91,6 @@ marge_mshop = (0.22 * (data['BRENT']/80)) - data['INF_ACIER']
 marge_dsales = 0.15 * (1 / data['TND_USD'] * 3.1)
 marge_main = 0.18 + (data['INF_ACIER'] * 0.2)
 
-# --- MISE À JOUR LOGIQUE SELON POLITIQUE COMMERCIALE ---
 status_mshop = "CONFORME" if marge_mshop >= 0.20 else "ALERTE RENTABILITÉ"
 status_dsales = "CONFORME" if marge_dsales <= 0.10 else "HORS STRATÉGIE"
 status_main = "CONFORME" if marge_main >= 0.25 else "SOUS-PERFORMANCE"
@@ -114,7 +112,7 @@ entite_selectionnee = st.sidebar.radio("🏢 SÉLECTIONNER L'ENTITÉ :", ["MBA-C
 st.sidebar.markdown("---")
 st.sidebar.title("🌐 LIVE MARKET DATA")
 st.sidebar.metric("🛢️ BRENT (Boursorama)", f"{data['BRENT']} $", delta="LIVE")
-st.sidebar.metric("🇹🇳 USD / TND (LIVE)", f"{data['TND_USD']}", delta="LIVE")
+st.sidebar.metric("🇹🇳 USD / TND (BOURSORAMA)", f"{data['TND_USD']}", delta="LIVE")
 st.sidebar.markdown("---")
 st.sidebar.write(f"🎯 **Seuil CAPEX :** {data['SEUIL_CAPEX']*100}%")
 st.sidebar.write(f"🏗️ **Inflation Acier :** {data['INF_ACIER']*100}%")
