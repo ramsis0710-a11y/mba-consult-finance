@@ -37,18 +37,18 @@ def get_live_market_data():
             if price_tag:
                 market_data["BRENT"] = float(price_tag.text.replace(" ", "").replace(",", ".").strip())
 
-        # 2. Scraping USD/TND (Investing.com - Remplacement de DinarTunisien/BCT)
+        # 2. Scraping USD/TND (Investing.com)
         curr_url = "https://www.investing.com/currencies/usd-tnd"
         res_curr = requests.get(curr_url, headers=headers, timeout=15)
         if res_curr.status_code == 200:
             soup_curr = BeautifulSoup(res_curr.text, 'html.parser')
-            # Recherche par l'attribut data-test propre à Investing.com
+            # Extraction dynamique du dernier cours USD/TND
             price_tag_curr = soup_curr.find("span", {"data-test": "instrument-last-price"})
             if price_tag_curr:
                 val_txt = price_tag_curr.text.strip().replace(",", ".")
                 try:
                     val_float = float(val_txt)
-                    if 2.0 < val_float < 4.5: # Filtre de cohérence économique élargi
+                    if 2.0 < val_float < 4.5: # Filtre de cohérence élargi
                         market_data["TND_USD"] = val_float
                 except:
                     pass
@@ -57,7 +57,7 @@ def get_live_market_data():
         pass
 
     # --- SÉCURITÉ ABSOLUE ---
-    # Si le scraping échoue, on utilise la valeur cible actuelle pour la continuité du service
+    # Si le scraping échoue, on utilise la valeur de référence dynamique
     if market_data["TND_USD"] is None:
         market_data["TND_USD"] = 3.1250 
         
@@ -169,11 +169,9 @@ def generate_advanced_report(entite):
     pdf = FPDF()
     pdf.add_page()
     
-    # Génération Référence Séquentielle 6 chars
     ref_seq = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     ref_full = f"REF/{ref_seq}/{datetime.now().strftime('%d%m%Y')}"
     
-    # En-tête : Logo et Titre
     logo_path = "logo.png" if entite == "MBA-CONSULT" else "logo GMPI.png"
     if os.path.exists(logo_path):
         pdf.image(logo_path, x=140, y=10, w=60, h=30)
@@ -181,7 +179,6 @@ def generate_advanced_report(entite):
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, f"RAPPORT DE SYNTHESE KMS - {entite}", 0, 1, 'L')
     
-    # Ajout de la Référence à gauche sous le titre
     pdf.set_font("Arial", "B", 10)
     pdf.set_text_color(100, 100, 100)
     pdf.cell(0, 5, ref_full, 0, 1, 'L')
@@ -191,7 +188,6 @@ def generate_advanced_report(entite):
     pdf.cell(0, 10, f"Edité le {datetime.now().strftime('%d/%m/%Y à %H:%M')}", 0, 1, 'L')
     pdf.ln(10)
     
-    # Tableau KPIs
     pdf.set_font("Arial", "B", 12)
     pdf.set_fill_color(200, 220, 255)
     pdf.cell(0, 10, "TABLEAU RÉCAPITULATIF DES KPIs PAR ACTIVITÉ", 1, 1, 'C', fill=True)
@@ -208,8 +204,6 @@ def generate_advanced_report(entite):
         pdf.cell(70, 10, str(row['Marge Prévue (%)']), 1, 1)
     
     pdf.ln(5)
-    
-    # Ajout de la courbe de simulation dans le PDF
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "SIMULATION DYNAMIQUE : IMPACT DU BRENT SUR LA RENTABILITE", 0, 1)
     
@@ -228,7 +222,6 @@ def generate_advanced_report(entite):
     pdf.image(img_buf, x=15, w=180)
     plt.close()
     
-    # Conclusions
     pdf.ln(5)
     pdf.set_font("Arial", "B", 12)
     pdf.cell(0, 10, "CONCLUSIONS STRATEGIQUES", 0, 1)
@@ -238,12 +231,10 @@ def generate_advanced_report(entite):
     conclusion += f"Tout investissement doit respecter le seuil CAPEX de {data['SEUIL_CAPEX']*100}%."
     pdf.multi_cell(0, 8, conclusion)
     
-    # Signature et QR Code à 10mm du fond
     pdf.set_y(-35)
     pdf.set_font("Arial", "B", 10)
     pdf.cell(0, 5, "Le responsable KMS", 0, 1, 'R')
     
-    # QR Code
     qr_url = f"https://chart.googleapis.com/chart?chs=100x100&cht=qr&chl={ref_full}"
     try:
         qr_content = requests.get(qr_url).content
@@ -252,7 +243,6 @@ def generate_advanced_report(entite):
     except:
         pass
         
-    # Retourne les bytes bruts pour Streamlit
     return bytes(pdf.output())
 
 st.divider()
